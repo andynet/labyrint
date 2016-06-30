@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="Author" content="Andrej Baláž" />
+  <title>Labyrint</title>
+  <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+
+<style>
+
+* {
+  margin: 0px;
+  padding: 0px;
+}
+
+body {
+  background-color: #057705;
+}
+
+#board {
+  margin: auto;
+  margin-top: 100px;
+}
+
+#rooms {
+  position: fixed;
+  top: 30px;
+  left: 30px;
+  width: 250px;
+  height: 500px;
+  background-color: rgba(0,0,0,0.5);
+}
+
+.room {
+  width: 248px;
+  height: 30px;
+  text-align: center;
+  color: #dddd55;
+  border-color: #dddd55;
+  border-style: solid;
+  border-width: 1px;
+  border-top-style: none;
+}
+
+#nazov_miestnosti {
+  position: fixed;
+  right: 30px;
+  top: 30px;
+  visibility: hidden;
+}
+
+.input {
+  width: 246px;
+}
+
+.button {
+  width: 250px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div id="rooms"></div>
+<div id="board"></div>
+<div id="nazov_miestnosti"></div>
+<script>
+
+//---------------------------------------------------------------------------------------------------------------------
+function field(typ){
+  this.rootElem = document.createElement('div');
+  this.rootElem.style.width = "20px";
+  this.rootElem.style.height = "20px";
+  this.rootElem.style.position = "relative";
+  this.rootElem.style.display = "block";
+  this.rootElem.style.float = "left";
+
+
+  if (typ == 0){
+    this.rootElem.style.background = "#057705";
+  } else if (typ == 2){
+    this.rootElem.style.background = "#dddd55";
+    this.man = document.createElement('div');
+    this.man.style.position = "relative";
+    this.man.style.width = "16px";
+    this.man.style.height = "16px";
+    this.man.style.top = "2px";
+    this.man.style.left = "2px";
+    this.man.style.background = "#800000";
+    this.man.style.borderRadius = "8px";
+    this.rootElem.appendChild(this.man);
+  } else {
+    this.rootElem.style.background = "#dddd55";
+  }
+}
+
+function draw_maze_part(a, xfrom, xto, yfrom, yto, max){
+  this.rootElem = document.createElement('div');
+  var x;
+  for (var i = xfrom; i <= xto; i++){
+    for (var j = yfrom; j <= yto; j++){
+      if ((i < 0)||(j < 0)||(i > max)||(j > max)){ 
+        x = new field(0); 
+      } else { 
+        x = new field(a[i][j]); 
+      }
+      this.rootElem.appendChild(x.rootElem);
+    }
+  }
+  return this.rootElem;
+}
+//---------------------------------------------------------------------------------------------------------------------
+//---socket------------------------------------------------------------------------------------------------------------  
+socket = io.connect ();
+
+var x = 0;
+var y = 0;
+var a;
+var dosah = 16;
+var size;
+
+function initialize_board(room){
+  a = room.matrix;
+  size = a.length;
+
+  if (x < 1){ x = (2*(Math.floor(Math.random()*((size-1)/2))))+1; }
+  if (y < 1){ y = (2*(Math.floor(Math.random()*((size-1)/2))))+1; }
+
+
+  //socket.emit('move', 1, 1 , x, y);
+  //a[x][y] = 2;
+
+  var board = document.getElementById("board");
+  board.style.width = (dosah+1)*20+"px";
+  while (board.hasChildNodes()) {   
+    board.removeChild(board.firstChild);
+  }
+  board.appendChild(draw_maze_part(a, x-(dosah/2), x+(dosah/2), y-(dosah/2), y+(dosah/2), size-1));
+}
+
+document.addEventListener("keydown", function(e){
+  
+  if((e.keyCode == 39)&&(a[x][y+1] != 0)){ 
+    if (a[x][y+1] == 2){ 
+      alert("Našli ste svojho partnera. Gratulujem!"); 
+    } else {
+      y++;
+      socket.emit('move', x, y-1 , x, y);
+    }
+  }
+  if((e.keyCode == 37)&&(a[x][y-1] != 0)){ 
+    if (a[x][y-1] == 2){ 
+      alert("Našli ste svojho partnera. Gratulujem!"); 
+    } else {  
+      y--;
+      socket.emit('move', x, y+1 , x, y);
+    }
+  }
+  if((e.keyCode == 40)&&(a[x+1][y] != 0)){ 
+    if (a[x+1][y] == 2){ 
+      alert("Našli ste svojho partnera. Gratulujem!"); 
+    } else {  
+      x++;
+      socket.emit('move', x-1, y , x, y);
+    }
+  }
+  if((e.keyCode == 38)&&(a[x-1][y] != 0)){
+    if (a[x-1][y] == 2){ 
+      alert("Našli ste svojho partnera. Gratulujem!"); 
+    } else {    
+      x--;
+      socket.emit('move', x+1, y , x, y);
+    }
+  }
+
+});
+
+var input = document.createElement('input');
+input.classList.add('input');
+input.setAttribute('type', 'text');
+document.getElementById('rooms').appendChild(input);
+
+var button = document.createElement('button');
+button.classList.add('button');
+button.innerHTML = "vytvor miestnost";
+button.addEventListener('click', function () {
+  console.log(document.getElementsByClassName('input')[0].value);
+  socket.emit ('make_room', document.getElementsByClassName('input')[0].value );
+});
+document.getElementById('rooms').appendChild(button);
+
+socket.on('write_rooms',  function(rooms) {
+
+  var list = document.getElementsByClassName('room');
+  console.log(list);
+  for (var i = list.length-1; i >= 0 ; i--){
+    document.getElementById('rooms').removeChild(list[i]);  
+  }
+
+  for (var i = 0; i < rooms.length; i++) {
+    if ((rooms[i].num > 0)&&(rooms[i].num < 2)){
+      var room = document.createElement('div');
+      room.setAttribute('id', rooms[i].id);
+      room.innerHTML = rooms[i].label;
+      room.classList.add('room');
+      room.addEventListener('click', function(e){
+        console.log('klikol som ' + e.target.id);
+        socket.emit('change_room', e.target.id);
+      });
+      document.getElementById('rooms').appendChild(room);
+    }
+  }
+});
+
+
+socket.on('enter_room', function(id, rooms){
+
+  initialize_board(rooms[id]);
+  socket.emit('initialize_position', x, y);
+  document.getElementById('nazov_miestnosti').innerHTML = "miestnost = " + rooms[id].label + ";pocet = " + rooms[id].num;
+
+});
+
+socket.on('refresh', function(players, rooms){
+
+  var roomid;
+
+  for (var i = 0; i < players.length; i++) {
+    if (players[i].socket == "/#"+socket.id){
+        roomid = players[i].room;
+      }
+  }
+
+  initialize_board(rooms[roomid]); 
+  document.getElementById('nazov_miestnosti').innerHTML = "miestnost = " + rooms[id].label + ";pocet = " + rooms[id].num; 
+});
+
+
+</script>
+</body>
+</html>
